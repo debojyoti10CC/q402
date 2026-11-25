@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Q402 Rollup</title>
+<style>
+  :root {
+    --bg: #0b0d14; --panel: #131725; --line: #232a40; --text: #e8ebf5; --muted: #8b93ad;
+    --accent: #7c9cff; --good: #3ecf8e; --warn: #f5b041; --bad: #ff5d6c;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); }
+  header { padding: 18px 20px; border-bottom: 1px solid var(--line); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+  h1 span { color: var(--accent); }
+  .tag { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 3px 10px; }
+  main { padding: 16px 20px; display: grid; gap: 14px; grid-template-columns: repeat(12, 1fr); max-width: 1400px; margin: 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .kpi { grid-column: span 3; } .party { grid-column: span 4; } .wide { grid-column: span 7; } .side { grid-column: span 5; }
+  @media (max-width: 900px) { .kpi, .party, .wide, .side { grid-column: span 12; } }
+  .big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 4px; word-break: break-all; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .chip { font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 600; }
+  .submitted { background: #2a3355; color: var(--accent); } .finalized { background: #123a2a; color: var(--good); }
+  .rejected { background: #4a1820; color: var(--bad); } .challenged { background: #4a3810; color: var(--warn); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+  #log { height: 420px; overflow: auto; font-size: 12.5px; }
+  .ev { padding: 6px 4px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; }
+  .ev time { color: var(--muted); flex: none; width: 64px; }
+  .ev.fraud, .ev.evil-armed { color: var(--bad); } .ev.challenge { color: var(--warn); } .ev.verified, .ev.finalized, .ev.withdrawal { color: var(--good); }
+  .buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { background: #1d2337; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; font-size: 13px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.danger { border-color: #6b2630; color: #ffb3bb; }
+  .thief .big { color: var(--bad); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Q402</span> · pay-per-call rollup for AI agents</h1>
+  <span class="tag" id="mode">…</span>
+  <span class="tag" id="rollup">…</span>
+  <span class="tag">ML-DSA batches · ML-KEM sealed data · fraud-proof watchtower</span>
+</header>
+<main>
+  <div class="card kpi"><h2>Paid API calls</h2><div class="big" id="k-pay">0</div><div class="sub" id="k-vol">0 QOR</div></div>
+  <div class="card kpi"><h2>Inbox</h2><div class="big" id="k-inbox">0</div><div class="sub" id="k-consumed">consumed 0</div></div>
+  <div class="card kpi"><h2>Batches</h2><div class="big" id="k-batches">0</div><div class="sub" id="k-final">0 final</div></div>
+  <div class="card kpi"><h2>Controls</h2>
+    <div class="buttons">
+      <button onclick="act('/admin/faucet')">Top up agent</button>
+      <button onclick="act('/admin/withdraw')">Provider withdraws</button>
+      <button class="danger" onclick="act('/admin/evil')">Evil sequencer</button>
+    </div>
+  </div>
+
+  <div class="card party"><h2>AI agent wallet (L2)</h2><div class="big" id="p-agent">–</div><div class="sub" id="p-agent-s"></div></div>
+  <div class="card party"><h2>API provider</h2><div class="big" id="p-prov">–</div><div class="sub" id="p-prov-s"></div></div>
+  <div class="card party thief"><h2>Thief account (sequencer's own)</h2><div class="big" id="p-thief">–</div><div class="sub">What a dishonest sequencer tries to mint itself. Must stay 0.</div></div>
+
+  <div class="card wide"><h2>Settlement batches on QoreChain</h2>
+    <table><thead><tr><th>#</th><th>txs</th><th>status</th><th>state root</th><th>inbox</th><th></th></tr></thead><tbody id="batches"></tbody></table>
+  </div>
+  <div class="card side"><h2>Live events</h2><div id="log"></div></div>
+</main>
+<script>
+  const QOR = (u) => (Number(u) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 4 }) + " QOR";
+  const short = (h) => (h && h.length > 14 ? h.slice(0, 8) + "…" + h.slice(-6) : h || "");
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const describe = {
+    payment: (d) => `${d.kind === "withdraw" ? "Withdrawal request" : "Payment"} ${QOR(d.amount)} ${d.resource ? "for " + d.resource : ""} · ${d.bytes} B ML-DSA-44 tx`,
+    "payment-rejected": (d) => `Payment refused: ${esc(d.reason)}`,
+    posted: (d) => `Posted to rollup inbox ${d.link ? `<a href="${d.link}" target="_blank">tx</a>` : short(d.ref)}`,
+    batch: (d) => d.evil ? `Batch #${d.index} submitted, LYING: mints ${QOR(d.stolen)} to the sequencer` : `Batch #${d.index} submitted · ${d.txCount} entries · ML-DSA-87 anchored`,
+    verified: (d) => `Watchtower re-executed batch #${d.index}: correct`,
+    fraud: (d) => `Watchtower: batch #${d.index} is FRAUD (published ${short(d.published)}, correct ${short(d.correct)})`,
+    challenge: (d) => `Fraud proof sent for batch #${d.index}: ${d.upheld ? "UPHELD, batch rejected" : "dismissed"}`,
+    finalized: (d) => `Batch #${d.index} final (challenge window closed)`,
+    withdrawal: (d) => `Paid out ${QOR(d.amount)} on L1 to ${short(d.recipient)}`,
+    deposit: (d) => `Deposit ${QOR(d.amount)} into the rollup`,
+    "evil-armed": (d) => `Sequencer turned evil: next batch will steal ${QOR(d.amount)}`,
+    warn: (d) => `${esc(d.where)}: ${esc(d.message)}`,
+    "watchtower-warn": (d) => `watchtower: ${esc(d.message)}`,
+  };
+  function addEvent(ev) {
+    const f = describe[ev.type]; if (!f) return;
+    const div = document.createElement("div");
+    div.className = "ev " + ev.type;
+    div.innerHTML = `<time>${new Date(ev.t).toLocaleTimeString()}</time><span>${f(ev.data)}</span>`;
+    $("log").prepend(div);
+    while ($("log").children.length > 200) $("log").lastChild.remove();
+  }
+  async function act(path) {
+    const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    const j = await r.json(); if (!r.ok) alert(j.error || j.reason || r.status);
+  }
+  async function refresh() {
+    const s = await (await fetch("/state")).json();
+    $("mode").textContent = s.mode === "mock" ? "local devnet (mock L1)" : "QoreChain testnet";
+    $("rollup").textContent = `${s.chainId} / ${s.rollupId}`;
+    $("k-pay").textContent = s.facilitator.stats.payments;
+    $("k-vol").textContent = QOR(s.facilitator.stats.volume) + " paid · " + s.facilitator.stats.rejected + " refused";
+    $("k-inbox").textContent = s.inbox.head;
+    $("k-consumed").textContent = `consumed by batches: ${s.inbox.consumed}`;
+    $("k-batches").textContent = s.batches.length;
+    $("k-final").textContent = `${s.batches.filter((b) => b.status === "finalized").length} final · ${s.batches.filter((b) => b.status === "rejected").length} rejected`;
+    const a = s.parties.agent, p = s.parties.provider;
+    $("p-agent").textContent = QOR(a.balance);
+    $("p-agent-s").textContent = `account ${short(a.accountId)} · nonce ${a.nextNonce} · ${a.pending} in flight`;
+    $("p-prov").textContent = QOR(BigInt(p.balance) + BigInt(p.incoming));
+    $("p-prov-s").textContent = `on rollup · withdrawn to L1: ${QOR(p.l1Balance)} · ${short(p.address)}`;
+    $("p-thief").textContent = QOR(s.parties.thief.confirmedBalance);
+    const now = Date.now();
+    $("batches").innerHTML = s.batches.slice().reverse().map((b) => {
+      const left = b.status === "submitted" && b.challengeDeadlineMs ? Math.max(0, Math.ceil((b.challengeDeadlineMs - now) / 1000)) + "s to final" : "";
+      return `<tr><td>${b.index}</td><td>${b.txCount}</td><td><span class="chip ${b.status}">${b.status}</span></td>
+        <td class="mono">${short(b.stateRoot)}</td><td class="mono">${b.inboxStart}→${b.inboxEnd}</td><td class="sub">${left}</td></tr>`;
+    }).join("");
+    return s;
+  }
+  refresh().then((s) => s.log.forEach(addEvent));
+  setInterval(refresh, 1000);
+  const es = new EventSource("/events");
+  es.onmessage = (m) => { try { addEvent(JSON.parse(m.data)); } catch {} };
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "name": "q402",
+  "version": "0.1.0",
+  "description": "Q402: pay-per-call API payments for AI agents on a post-quantum QoreChain rollup.",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "devnet": "tsx src/node/server.ts",
+    "provider": "tsx src/provider/server.ts",
+    "agent": "tsx src/agent/cli.ts",
+    "mcp": "tsx src/agent/mcp.ts",
+    "demo": "tsx scripts/demo.ts",
+    "setup:live": "tsx scripts/setup-live.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@qorechain/rdk": "0.9.0",
+    "@qorechain/sdk": "0.14.0",
+    "dotenv": "16.4.7",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "tsx": "4.20.3",
+    "typescript": "5.8.3"
+  }
+}
